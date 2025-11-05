@@ -14,8 +14,8 @@ Important: Use only against systems you own or have explicit written permission 
 4. Quick Bootstrap (Recommended)  
 5. Manual Step-by-Step Setup (Complete)  
    5.1 Prerequisites (install manually, no apt-get)  
-   5.2 Build CPython 3.11.10 from source  
-   5.3 Create and activate virtual environment  
+   5.2 Build CPython 3.11.10 from source (local layout: build-python, .local_python)  
+   5.3 Create and activate virtual environment (.venv)  
    5.4 Install Python dependencies (requirements merging)  
    5.5 Build radamsa from source  
    5.6 Build frontend (npm)  
@@ -32,7 +32,8 @@ Important: Use only against systems you own or have explicit written permission 
 12. Troubleshooting  
 13. Security Notes  
 14. Roadmap  
-15. License
+15. Local Python Installation Layout and Maintenance (Detailed)  
+16. License
 
 ---
 
@@ -122,7 +123,7 @@ Replace the repository URL with your own.
 
 ## 4. Quick Bootstrap (Recommended)
 
-This will build CPython 3.11.10 locally, create a virtualenv, install Python dependencies, build radamsa from source, and build the UI if npm is available.
+This will build CPython 3.11.10 locally under `.local_python/python-3.11.10/`, create a virtualenv `.venv/`, install Python dependencies, build radamsa from source into `vendor/bin/`, and build the UI if npm is available.
 
 ```bash
 chmod +x setup_bootstrap.sh install_from_source/*.sh
@@ -164,7 +165,13 @@ Useful sources:
 - libffi: https://sourceware.org/libffi/
 - nmap: https://nmap.org/download.html
 
-### 5.2 Build CPython 3.11.10 from source
+### 5.2 Build CPython 3.11.10 from source (local layout: build-python, .local_python)
+
+The repository uses a local installation layout so it does not interfere with system Python.
+
+- Build tree: `build-python/` (temporary, safe to remove after install)
+- Install prefix: `.local_python/python-3.11.10/` (kept in repo)
+- Virtual environment: `.venv/` (created from the above interpreter)
 
 Artifact:
 - URL: https://www.python.org/ftp/python/3.11.10/Python-3.11.10.tgz
@@ -172,30 +179,66 @@ Artifact:
 
 Commands:
 ```bash
+# Ensure you're in the repo root
+pwd
+
+# 1) Download the exact CPython source tarball
 wget https://www.python.org/ftp/python/3.11.10/Python-3.11.10.tgz
+
+# 2) Verify integrity
 echo "07a4356e912900e61a15cb0949a06c4a05012e213ecd6b4e84d0f67aabbee372  Python-3.11.10.tgz" | sha256sum -c -
+
+# 3) Create a clean build directory
+rm -rf build-python
 mkdir -p build-python
+
+# 4) Extract sources into build-python
 tar -xzf Python-3.11.10.tgz -C build-python --strip-components=1
+
+# 5) Configure to install under .local_python/python-3.11.10
 pushd build-python
-./configure --prefix="$(pwd)/../.local_python/python-3.11.10" --enable-optimizations --with-ensurepip=install
+./configure --prefix="$(pwd)/../.local_python/python-3.11.10" \
+            --enable-optimizations \
+            --with-ensurepip=install
+
+# 6) Build (use nproc if available)
 make -j"$(nproc || echo 2)"
+
+# 7) Install into the local prefix
 make install
 popd
-```
-You should now have: `.local_python/python-3.11.10/bin/python3.11`
 
-Alternatively:
-```bash
-chmod +x install_from_source/install_python.sh
-./install_from_source/install_python.sh .local_python/python-3.11.10
+# Resulting interpreter:
+# ./.local_python/python-3.11.10/bin/python3.11
 ```
 
-### 5.3 Create and activate virtual environment
+Optional clean-up:
+```bash
+# After successful install you may remove the build directory
+rm -rf build-python
+```
+
+### 5.3 Create and activate virtual environment (.venv)
 
 ```bash
+# Create a venv tied explicitly to the local interpreter we built
 .local_python/python-3.11.10/bin/python3.11 -m venv .venv
+
+# Activate venv in the current shell
 source .venv/bin/activate
+
+# Upgrade core packaging tools
 pip install --upgrade pip setuptools wheel
+
+# Verify the interpreter in use comes from the venv/local build
+which python
+python --version
+```
+
+Expected output examples:
+```
+/path/to/repo/.venv/bin/python
+Python 3.11.10
 ```
 
 ### 5.4 Install Python dependencies (requirements merging)
@@ -377,6 +420,63 @@ Citations you requested for the uploaded requirements:
 
 ---
 
-## 15. License
+## 15. Local Python Installation Layout and Maintenance (Detailed)
+
+This project intentionally avoids touching system Python. Everything lives under the repository directory:
+
+- build-python/ — temporary source build tree for CPython. Safe to delete after install.
+- .local_python/python-3.11.10/ — persisted installation prefix for CPython 3.11.10.
+  - Example executables: .local_python/python-3.11.10/bin/python3.11, pip3.11
+- .venv/ — virtual environment created from the above interpreter for project isolation.
+
+Create or re-create these explicitly:
+
+```bash
+# Clean any prior artifacts (be careful: this removes your venv)
+rm -rf build-python .local_python .venv
+
+# Build CPython locally
+wget https://www.python.org/ftp/python/3.11.10/Python-3.11.10.tgz
+echo "07a4356e912900e61a15cb0949a06c4a05012e213ecd6b4e84d0f67aabbee372  Python-3.11.10.tgz" | sha256sum -c -
+mkdir -p build-python
+tar -xzf Python-3.11.10.tgz -C build-python --strip-components=1
+pushd build-python
+./configure --prefix="$(pwd)/../.local_python/python-3.11.10" --enable-optimizations --with-ensurepip=install
+make -j"$(nproc || echo 2)"
+make install
+popd
+
+# Create venv from the local interpreter
+.local_python/python-3.11.10/bin/python3.11 -m venv .venv
+
+# Activate venv and install deps
+source .venv/bin/activate
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+
+# Verify you are using the correct interpreter
+which python
+python --version
+```
+
+To force the project to always use the local interpreter, prefer commands like:
+
+```bash
+# Use the venv’s interpreter explicitly
+./.venv/bin/python -m uvicorn vulnspiral.server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+To update Python minor dependencies without rebuilding CPython:
+
+```bash
+source .venv/bin/activate
+pip install --upgrade -r requirements.txt
+```
+
+To rebuild CPython (for example, if libraries changed), remove build-python and .local_python/python-3.11.10/ and repeat the build steps above.
+
+---
+
+## 16. License
 
 MIT License. See LICENSE for details.
