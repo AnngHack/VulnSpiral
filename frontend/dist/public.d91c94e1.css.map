@@ -1,0 +1,1 @@
+{"mappings":"AAAA;;;;AACA;;;;AACA","sources":["src/styles.css"],"sourcesContent":["body { background: #f6f8fb; }\n.card { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }\npre { font-size: 12px; white-space: pre-wrap; word-break: break-word; }\n"],"names":[],"version":3,"file":"public.d91c94e1.css.map","sourceRoot":"/__parcel_source_root/"}
